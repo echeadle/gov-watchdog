@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom base styles */
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+/* Custom component classes */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors;
+  }
+
+  .btn-primary {
+    @apply btn bg-blue-600 text-white hover:bg-blue-700;
+  }
+
+  .btn-secondary {
+    @apply btn bg-gray-200 text-gray-800 hover:bg-gray-300;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4;
+  }
+
+  .input {
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none;
+  }
+}
+
+/* Party color utilities */
+@layer utilities {
+  .party-d {
+    @apply text-democratic;
+  }
+
+  .party-r {
+    @apply text-republican;
+  }
+
+  .party-i {
+    @apply text-independent;
+  }
+
+  .bg-party-d {
+    @apply bg-democratic;
+  }
+
+  .bg-party-r {
+    @apply bg-republican;
+  }
+
+  .bg-party-i {
+    @apply bg-independent;
+  }
+}

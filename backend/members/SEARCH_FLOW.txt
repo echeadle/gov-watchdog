@@ -1,0 +1,398 @@
+================================================================================
+MEMBER SEARCH FUNCTIONALITY - FLOW DIAGRAM
+================================================================================
+
+USER INPUT FLOW
+---------------
+
+  User Query: "Mike Lee"
+       |
+       v
+  +------------------+
+  | API Endpoint     |  GET /api/v1/members/?q=Mike+Lee
+  | (views.py)       |
+  +------------------+
+       |
+       v
+  +------------------+
+  | MemberService    |  search_members(params)
+  | .search_members()|
+  +------------------+
+       |
+       v
+  +------------------------+
+  | _build_name_search_    |  Main router function
+  | query("Mike Lee")      |
+  +------------------------+
+       |
+       v
+  +------------------------+
+  | _normalize_search_term |  "Mike Lee" -> "Mike Lee" (already clean)
+  | ("Mike Lee")           |
+  +------------------------+
+       |
+       v
+  +------------------------+
+  | Split & Escape         |  ["Mike", "Lee"] -> [escaped versions]
+  +------------------------+
+       |
+       v
+  +------------------------+
+  | Route by word count:   |
+  | len(parts) == 2        |
+  +------------------------+
+       |
+       v
+  +------------------------+
+  | _build_two_word_query  |  Build MongoDB query with 3 strategies
+  | ("Mike", "Lee")        |
+  +------------------------+
+       |
+       v
+  +------------------------+
+  | MongoDB Query:         |
+  | {                      |
+  |   "$or": [             |
+  |     {"$and": [         |  Strategy 1: Forward order
+  |       {"first_name":   |  Mike + Lee
+  |         {"$regex":..}} |
+  |       {"last_name":... |
+  |     ]},                |
+  |     {"$and": [         |  Strategy 2: Reverse order
+  |       {"first_name":   |  Lee + Mike
+  |       {"last_name":... |
+  |     ]},                |
+  |     {"name": {         |  Strategy 3: Full name
+  |       "$regex":...     |  "Mike.*Lee|Lee.*Mike"
+  |     }}                 |
+  |   ]                    |
+  | }                      |
+  +------------------------+
+       |
+       v
+  +------------------------+
+  | MongoDB Collection     |  Find documents matching query
+  | .find(query)           |
+  +------------------------+
+       |
+       v
+  +------------------------+
+  | Sort & Paginate        |  Sort by last_name, first_name
+  | .sort().skip().limit() |  Skip to page, limit to page_size
+  +------------------------+
+       |
+       v
+  +------------------------+
+  | Transform Results      |  Convert to MemberSummary objects
+  +------------------------+
+       |
+       v
+  +------------------------+
+  | Return Response        |
+  | {                      |
+  |   "results": [...],    |
+  |   "total": 5,          |
+  |   "page": 1,           |
+  |   "page_size": 20,     |
+  |   "total_pages": 1     |
+  | }                      |
+  +------------------------+
+       |
+       v
+  JSON Response to User
+
+
+================================================================================
+SEARCH STRATEGIES BY INPUT TYPE
+================================================================================
+
+1. SINGLE WORD: "Mike"
+   -----------------
+
+   Input: "Mike"
+        |
+        v
+   _build_single_word_query("Mike")
+        |
+        v
+   MongoDB Query:
+   {
+     "$or": [
+       {"first_name": {"$regex": "\\bMike", "$options": "i"}},  ← Check first name
+       {"last_name": {"$regex": "\\bMike", "$options": "i"}},   ← Check last name
+       {"name": {"$regex": "\\bMike", "$options": "i"}}         ← Check full name
+     ]
+   }
+
+   Matches:
+   - Mike Lee (first_name)
+   - Mike Johnson (first_name)
+   - Anyone with last name "Mike"
+
+
+2. TWO WORDS: "Mike Lee"
+   ---------------------
+
+   Input: "Mike Lee"
+        |
+        v
+   _build_two_word_query("Mike", "Lee")
+        |
+        v
+   MongoDB Query:
+   {
+     "$or": [
+       {
+         "$and": [                                               ← Forward order
+           {"first_name": {"$regex": "\\bMike", "$options": "i"}},
+           {"last_name": {"$regex": "\\bLee", "$options": "i"}}
+         ]
+       },
+       {
+         "$and": [                                               ← Reverse order
+           {"first_name": {"$regex": "\\bLee", "$options": "i"}},
+           {"last_name": {"$regex": "\\bMike", "$options": "i"}}
+         ]
+       },
+       {
+         "name": {                                               ← Full name pattern
+           "$regex": "\\bMike.*\\bLee|\\bLee.*\\bMike",
+           "$options": "i"
+         }
+       }
+     ]
+   }
+
+   Matches:
+   - Mike Lee (forward: first="Mike", last="Lee")
+   - Anyone named "Lee Mike" (reverse)
+   - Full name containing both words
+
+
+3. THREE+ WORDS: "Martin Luther King"
+   ----------------------------------
+
+   Input: "Martin Luther King"
+        |
+        v
+   _build_multi_word_query(["Martin", "Luther", "King"])
+        |
+        v
+   MongoDB Query:
+   {
+     "$or": [
+       {
+         "name": {                                               ← All words in sequence
+           "$regex": "\\bMartin.*\\bLuther.*\\bKing",
+           "$options": "i"
+         }
+       },
+       {
+         "$and": [                                               ← First + Last word
+           {"first_name": {"$regex": "\\bMartin", "$options": "i"}},
+           {"last_name": {"$regex": "\\bKing", "$options": "i"}}
+         ]
+       },
+       {
+         "$and": [                                               ← Reversed
+           {"first_name": {"$regex": "\\bKing", "$options": "i"}},
+           {"last_name": {"$regex": "\\bMartin", "$options": "i"}}
+         ]
+       },
+       {
+         "$and": [                                               ← First two + Last
+           {"first_name": {"$regex": "\\bMartin.*\\bLuther", "$options": "i"}},
+           {"last_name": {"$regex": "\\bKing", "$options": "i"}}
+         ]
+       },
+       {
+         "$and": [                                               ← First + Last two
+           {"first_name": {"$regex": "\\bMartin", "$options": "i"}},
+           {"last_name": {"$regex": "\\bLuther.*\\bKing", "$options": "i"}}
+         ]
+       }
+     ]
+   }
+
+   Matches:
+   - Martin Luther King (full name)
+   - Martin King (first + last)
+   - Anyone with first="Martin Luther", last="King"
+
+
+================================================================================
+FILTER COMBINATION FLOW
+================================================================================
+
+User Query: "Smith" + state="CA" + party="D"
+     |
+     v
+Build name query: _build_name_search_query("Smith")
+     |
+     v
+name_query = {
+  "$or": [
+    {"first_name": {"$regex": "\\bSmith", "$options": "i"}},
+    {"last_name": {"$regex": "\\bSmith", "$options": "i"}},
+    {"name": {"$regex": "\\bSmith", "$options": "i"}}
+  ]
+}
+
+Build filter query: state="CA", party="D"
+     |
+     v
+filter_query = {
+  "state": "CA",
+  "party": "D"
+}
+
+Combine with $and:
+     |
+     v
+final_query = {
+  "$and": [
+    {                              ← Filter conditions
+      "state": "CA",
+      "party": "D"
+    },
+    {                              ← Name search conditions
+      "$or": [
+        {"first_name": {"$regex": "\\bSmith", "$options": "i"}},
+        {"last_name": {"$regex": "\\bSmith", "$options": "i"}},
+        {"name": {"$regex": "\\bSmith", "$options": "i"}}
+      ]
+    }
+  ]
+}
+     |
+     v
+MongoDB finds: Democratic Smiths from California only
+
+
+================================================================================
+WORD BOUNDARY MATCHING EXPLANATION
+================================================================================
+
+Pattern: \bMic
+
+What it matches:
+  ✓ "Michael"      (Mic at word start)
+  ✓ "Michelle"     (Mic at word start)
+  ✓ "Mick"         (Mic at word start)
+
+What it DOESN'T match:
+  ✗ "Dominic"      (Mic not at word start)
+  ✗ "Economics"    (Mic not at word start)
+
+Example in name "Mary Michael Smith":
+  - \bMic matches "Michael" (word boundary before "Michael")
+  - \bMar matches "Mary" (word boundary before "Mary")
+  - \bSmit matches "Smith" (word boundary before "Smith")
+
+
+================================================================================
+EDGE CASES HANDLED
+================================================================================
+
+1. Extra Whitespace
+   Input: "  Mike   Lee  "
+   After normalization: "Mike Lee"
+   Result: Treated as normal two-word search
+
+2. Empty Search
+   Input: ""
+   Result: Returns empty query {}, fetches all members
+
+3. Special Characters
+   Input: "O'Brien"
+   After escaping: "O'Brien" (apostrophe doesn't need escaping)
+
+   Input: "Smith (Jr.)"
+   After escaping: "Smith \\(Jr\\.\\)"
+   Result: Safe regex pattern
+
+4. Case Variations
+   Input: "MIKE", "mike", "Mike", "MiKe"
+   All use: {"$options": "i"} for case-insensitive matching
+   Result: All return identical results
+
+
+================================================================================
+PERFORMANCE FLOW
+================================================================================
+
+Query Performance Factors:
+
+1. Number of search terms
+   - 1 word: 3 regex patterns      ← Fastest
+   - 2 words: 3 compound patterns  ← Fast
+   - 3+ words: 5+ patterns         ← Moderate
+
+2. Filters applied
+   - With filters: Narrows search  ← Faster
+   - No filters: Full scan         ← Slower
+
+3. Database size
+   - <10k members: <100ms          ← No optimization needed
+   - 10k-100k: 100-500ms           ← Fine as-is
+   - >100k: Consider indexes       ← Add text indexes
+
+4. Result set size
+   - Small results: Fast sorting   ← Good
+   - Large results: Consider limits ← Use pagination
+
+
+Optimization Path:
+
+  Input Query
+       |
+       v
+  Filter First (if any)  ← Reduces search space
+       |
+       v
+  Name Search (regex)    ← Optimized patterns
+       |
+       v
+  Sort Results           ← Uses index if available
+       |
+       v
+  Paginate               ← Limits data transfer
+
+
+================================================================================
+CODE STRUCTURE
+================================================================================
+
+services.py
+│
+├── _normalize_search_term()        [Helper: Clean input]
+│   └── Returns: Normalized string
+│
+├── _escape_regex_special_chars()   [Helper: Security]
+│   └── Returns: Escaped string
+│
+├── _build_single_word_query()      [Strategy: 1 word]
+│   └── Returns: MongoDB query dict
+│
+├── _build_two_word_query()         [Strategy: 2 words]
+│   └── Returns: MongoDB query dict
+│
+├── _build_multi_word_query()       [Strategy: 3+ words]
+│   └── Returns: MongoDB query dict
+│
+├── _build_name_search_query()      [Router: Dispatch by count]
+│   ├── Normalize input
+│   ├── Escape parts
+│   └── Route to strategy
+│
+└── MemberService
+    └── search_members()            [Main API]
+        ├── Build filters
+        ├── Call _build_name_search_query()
+        ├── Combine with $and
+        ├── Query database
+        ├── Sort & paginate
+        └── Return results
+
+
+================================================================================

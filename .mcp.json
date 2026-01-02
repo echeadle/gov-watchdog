@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mongodb": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-mongo"],
+      "env": {
+        "MONGODB_URI": "mongodb://admin:devpassword@localhost:27017",
+        "MONGODB_DATABASE": "${MONGODB_DB:-gov_watchdog}"
+      }
+    }
+  }
+}

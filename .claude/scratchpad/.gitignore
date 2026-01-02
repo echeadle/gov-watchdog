@@ -1,0 +1,14 @@
+# Don't commit filled-in working files
+TODO.md
+research-notes.md
+decisions.md
+blockers.md
+findings.md
+context.md
+session-notes.md
+patterns.md
+
+# Keep the templates and documentation
+!README.md
+!USAGE.md
+!.gitignore
