@@ -84,3 +84,58 @@ class BillActionsView(View):
         except Exception as e:
             logger.exception(f"Error fetching actions for {bill_id}")
             return JsonResponse({"error": "Internal server error"}, status=500)
+
+
+class BillSearchView(View):
+    """
+    GET /api/v1/bills/search/
+
+    Search bills with keyword, party, subject, and congress filters.
+
+    Query params:
+    - q: str (keyword search on title and summaries)
+    - party: str (D, R, I - filters by sponsor party)
+    - subject: str (legislative subject name)
+    - congress: int (119, 118, etc.)
+    - page: int (default: 1)
+    - page_size: int (default: 20)
+
+    Example:
+    GET /api/v1/bills/search/?q=climate&party=D&congress=119
+    """
+
+    async def get(self, request):
+        try:
+            # Extract query parameters
+            query = request.GET.get("q")
+            party = request.GET.get("party")
+            subject = request.GET.get("subject")
+            congress = request.GET.get("congress")
+            page = int(request.GET.get("page", 1))
+            page_size = int(request.GET.get("page_size", 20))
+
+            # Validate parameters
+            if page < 1:
+                return JsonResponse({"error": "Page must be >= 1"}, status=400)
+            if page_size < 1 or page_size > 100:
+                return JsonResponse(
+                    {"error": "Page size must be between 1 and 100"}, status=400
+                )
+
+            # Execute search with incremental syncing
+            result = await BillService.search_bills(
+                query=query,
+                party=party,
+                subject=subject,
+                congress=int(congress) if congress else None,
+                page=page,
+                page_size=page_size,
+            )
+
+            return JsonResponse(result)
+
+        except ValueError as e:
+            return JsonResponse({"error": str(e)}, status=400)
+        except Exception as e:
+            logger.exception("Error in BillSearchView")
+            return JsonResponse({"error": "Internal server error"}, status=500)

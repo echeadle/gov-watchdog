@@ -5,6 +5,7 @@ Member URL configuration.
 from django.urls import path
 
 from members.views import (
+    MemberAmendmentsView,
     MemberBillsView,
     MemberDetailView,
     MemberListView,
@@ -19,5 +20,6 @@ urlpatterns = [
     path("states/", StatesView.as_view(), name="states-list"),
     path("<str:bioguide_id>/", MemberDetailView.as_view(), name="member-detail"),
     path("<str:bioguide_id>/bills/", MemberBillsView.as_view(), name="member-bills"),
+    path("<str:bioguide_id>/amendments/", MemberAmendmentsView.as_view(), name="member-amendments"),
     path("<str:bioguide_id>/votes/", MemberVotesView.as_view(), name="member-votes"),
 ]

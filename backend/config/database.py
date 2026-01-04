@@ -121,7 +121,16 @@ async def ensure_indexes():
     await safe_create_index(bills, "sponsor_id")
     await safe_create_index(bills, "congress")
     await safe_create_index(bills, "introduced_date")
-    await safe_create_index(bills, [("title", "text")], name="bill_text_search")
+    await safe_create_index(bills, "legislative_subjects")  # Array index for subject filtering
+    await safe_create_index(bills, "policy_area")  # Policy area filtering
+
+    # Full-text search index for title and summaries
+    await safe_create_index(
+        bills,
+        [("title", "text"), ("summaries.text_plain", "text")],
+        name="bill_full_text_search",
+        default_language="english",
+    )
 
     # Votes indexes
     votes = db[COLLECTIONS["votes"]]

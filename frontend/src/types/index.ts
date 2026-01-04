@@ -67,6 +67,31 @@ export interface BillSummary {
   latest_action?: string
 }
 
+// Amendment types
+export interface Amendment {
+  amendment_id: string
+  amendment_number: string
+  congress: number
+  type: string
+  description?: string
+  purpose?: string
+  chamber: 'house' | 'senate'
+  introduced_date?: string
+  latest_action?: string
+  latest_action_date?: string
+  url?: string
+}
+
+export interface AmendmentSummary {
+  amendment_id: string
+  amendment_number: string
+  type: string
+  chamber: string
+  introduced_date?: string
+  latest_action?: string
+  latest_action_date?: string
+}
+
 // Vote types
 export interface Vote {
   vote_id: string

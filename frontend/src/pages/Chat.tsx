@@ -93,64 +93,107 @@ export default function Chat() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">AI Assistant</h1>
-        <Button variant="outline" size="sm" onClick={handleClear}>
-          <Trash2 className="w-4 h-4 mr-1" />
-          Clear Chat
-        </Button>
+    <div style={{ backgroundColor: '#fafaf9', minHeight: '100vh' }}>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+        {/* Page Header */}
+        <div className="mb-10 pb-6 border-b-2 border-slate-200">
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="heading-2 text-slate-900 mb-2">
+              AI Research Assistant
+            </h1>
+            <p className="text-slate-600 text-lg max-w-2xl">
+              Ask questions about Congress members, their voting records, sponsored legislation,
+              and legislative activity. Powered by Claude AI.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            onClick={handleClear}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            New Conversation
+          </Button>
+        </div>
       </div>
 
-      <Card className="h-[600px] flex flex-col">
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Chat Interface */}
+      <div className="bg-white rounded-xl border-2 border-slate-200 shadow-lg overflow-hidden h-[600px] flex flex-col">
+        {/* Messages Area */}
+        <div style={{ backgroundColor: '#fafaf9' }} className="flex-1 overflow-y-auto p-6 space-y-6">
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`flex gap-3 ${
+              className={`flex gap-4 ${
                 message.role === 'user' ? 'flex-row-reverse' : ''
               }`}
             >
+              {/* Avatar */}
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm ${
                   message.role === 'user'
-                    ? 'bg-blue-100 text-blue-600'
-                    : 'bg-gray-100 text-gray-600'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-white border-2 border-slate-200 text-slate-700'
                 }`}
               >
                 {message.role === 'user' ? (
                   <User className="w-5 h-5" />
                 ) : (
-                  <Bot className="w-5 h-5" />
+                  <Bot className="w-6 h-6" />
                 )}
               </div>
+
+              {/* Message Bubble */}
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                  message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                className={`flex-1 max-w-[85%] ${
+                  message.role === 'user' ? 'flex justify-end' : ''
                 }`}
               >
-                <p className="whitespace-pre-wrap">{message.content}</p>
+                <div
+                  className={`rounded-xl px-5 py-3.5 shadow-sm ${
+                    message.role === 'user'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-slate-900'
+                  }`}
+                  style={message.role === 'assistant' ? {
+                    backgroundColor: '#f8f8ff',
+                    border: '1px solid rgba(79, 70, 229, 0.08)'
+                  } : undefined}
+                >
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {message.content}
+                  </p>
+                  <div
+                    className={`text-xs mt-2 ${
+                      message.role === 'user' ? 'text-primary-100' : 'text-slate-400'
+                    }`}
+                  >
+                    {message.timestamp.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           ))}
 
+          {/* Loading Indicator */}
           {isLoading && (
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                <Bot className="w-5 h-5 text-gray-600" />
+            <div className="flex gap-4">
+              <div className="w-10 h-10 rounded-lg bg-white border-2 border-slate-200 flex items-center justify-center shadow-sm">
+                <Bot className="w-6 h-6 text-slate-700" />
               </div>
-              <div className="bg-gray-100 rounded-lg px-4 py-2">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+              <div style={{ backgroundColor: '#f8f8ff', border: '1px solid rgba(79, 70, 229, 0.08)' }} className="rounded-xl px-5 py-3.5 shadow-sm">
+                <div className="flex space-x-1.5">
+                  <div className="w-2.5 h-2.5 bg-primary-400 rounded-full animate-bounce" />
                   <div
-                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    className="w-2.5 h-2.5 bg-primary-400 rounded-full animate-bounce"
                     style={{ animationDelay: '0.1s' }}
                   />
                   <div
-                    className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                    className="w-2.5 h-2.5 bg-primary-400 rounded-full animate-bounce"
                     style={{ animationDelay: '0.2s' }}
                   />
                 </div>
@@ -161,24 +204,36 @@ export default function Chat() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
+        {/* Input Area */}
         <form
           onSubmit={handleSubmit}
-          className="border-t border-gray-200 p-4 flex gap-2"
+          className="border-t-2 border-slate-200 p-4 bg-white flex gap-3"
         >
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about Congress members, bills, or votes..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            placeholder="Ask about Congress members, bills, votes, or amendments..."
+            className="flex-1 px-5 py-3.5 border-2 border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 outline-none placeholder:text-slate-400 text-base"
             disabled={isLoading}
           />
-          <Button type="submit" disabled={isLoading || !input.trim()}>
+          <Button
+            type="submit"
+            disabled={isLoading || !input.trim()}
+            className="btn-primary px-6 py-3.5 shadow-md hover:shadow-lg transition-all"
+          >
             <Send className="w-5 h-5" />
           </Button>
         </form>
-      </Card>
+      </div>
+
+      {/* Helper Text */}
+      <div className="mt-6 text-center">
+        <p className="text-sm text-slate-500">
+          <span className="font-semibold">Example queries:</span> "Find all California representatives" • "Show me bills by Rep. Smith" • "What are the latest votes?"
+        </p>
+      </div>
+      </div>
     </div>
   )
 }

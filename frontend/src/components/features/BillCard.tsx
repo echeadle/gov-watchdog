@@ -1,6 +1,6 @@
-import { Card, CardBody } from '../ui/Card'
 import Badge from '../ui/Badge'
 import type { BillSummary } from '../../types'
+import { Calendar } from 'lucide-react'
 
 interface BillCardProps {
   bill: BillSummary
@@ -17,27 +17,32 @@ export default function BillCard({ bill }: BillCardProps) {
   }
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardBody>
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <Badge variant="default" size="sm">
-            {bill.type.toUpperCase()} {bill.number}
-          </Badge>
-          <span className="text-xs text-gray-500">
-            {formatDate(bill.introduced_date)}
-          </span>
+    <div className="bg-white rounded-lg border-2 border-slate-200 p-5 transition-all duration-200 hover:shadow-lg hover:-translate-y-1 hover:border-slate-300">
+      {/* Header: Bill Number & Date */}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <Badge variant="primary" size="md" className="font-mono font-semibold">
+          {bill.type.toUpperCase()} {bill.number}
+        </Badge>
+        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+          <Calendar className="w-3.5 h-3.5" />
+          <span className="font-medium">{formatDate(bill.introduced_date)}</span>
         </div>
+      </div>
 
-        <h3 className="font-medium text-gray-900 line-clamp-2 mb-2">
-          {bill.title}
-        </h3>
+      {/* Bill Title */}
+      <h3 className="font-headline text-lg font-semibold text-slate-900 line-clamp-2 mb-3 leading-tight">
+        {bill.title}
+      </h3>
 
-        {bill.latest_action && (
-          <p className="text-sm text-gray-600 line-clamp-2">
-            <span className="font-medium">Latest:</span> {bill.latest_action}
+      {/* Latest Action */}
+      {bill.latest_action && (
+        <div className="pt-3 border-t border-slate-100">
+          <p className="text-sm text-slate-600 line-clamp-2">
+            <span className="font-semibold text-slate-700">Latest Action: </span>
+            {bill.latest_action}
           </p>
-        )}
-      </CardBody>
-    </Card>
+        </div>
+      )}
+    </div>
   )
 }

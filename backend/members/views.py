@@ -95,6 +95,33 @@ class MemberBillsView(View):
             return JsonResponse({"error": "Internal server error"}, status=500)
 
 
+class MemberAmendmentsView(View):
+    """
+    GET /api/v1/members/{bioguide_id}/amendments/
+    Get member's sponsored amendments.
+    """
+
+    async def get(self, request, bioguide_id: str):
+        try:
+            limit = int(request.GET.get("limit", 20))
+            offset = int(request.GET.get("offset", 0))
+
+            result = await MemberService.get_member_amendments(
+                bioguide_id, limit=limit, offset=offset
+            )
+
+            if "error" in result:
+                return JsonResponse(result, status=500)
+
+            return JsonResponse(result)
+
+        except ValueError as e:
+            return JsonResponse({"error": str(e)}, status=400)
+        except Exception as e:
+            logger.exception(f"Error fetching amendments for {bioguide_id}")
+            return JsonResponse({"error": "Internal server error"}, status=500)
+
+
 class MemberStatsView(View):
     """
     GET /api/v1/members/stats/

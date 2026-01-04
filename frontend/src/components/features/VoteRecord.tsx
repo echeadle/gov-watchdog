@@ -69,6 +69,29 @@ export default function VoteRecord({ bioguideId }: VoteRecordProps) {
     })
   }
 
+  const formatBillId = (billId: string) => {
+    // Convert "hr1676-119" to "H.R. 1676"
+    // Convert "s1071-119" to "S. 1071"
+    // Convert "hjres42-119" to "H.J.Res. 42"
+    const match = billId.match(/^([a-z]+)(\d+)-(\d+)$/)
+    if (!match) return billId
+
+    const [, type, number] = match
+    let formattedType = type.toUpperCase()
+
+    // Format common bill types
+    if (type === 'hr') formattedType = 'H.R.'
+    else if (type === 's') formattedType = 'S.'
+    else if (type === 'hjres') formattedType = 'H.J.Res.'
+    else if (type === 'sjres') formattedType = 'S.J.Res.'
+    else if (type === 'hconres') formattedType = 'H.Con.Res.'
+    else if (type === 'sconres') formattedType = 'S.Con.Res.'
+    else if (type === 'hres') formattedType = 'H.Res.'
+    else if (type === 'sres') formattedType = 'S.Res.'
+
+    return `${formattedType} ${number}`
+  }
+
   return (
     <div>
       <p className="text-sm text-gray-600 mb-4">
@@ -81,15 +104,19 @@ export default function VoteRecord({ bioguideId }: VoteRecordProps) {
             <CardBody className="py-3">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <p className="font-medium text-gray-900">{vote.question}</p>
-                  {vote.bill_id && (
-                    <p className="text-sm text-gray-600">Bill: {vote.bill_id}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <p className="font-medium text-gray-900">{vote.question}</p>
+                    {vote.bill_id && (
+                      <span className="text-sm font-semibold text-primary-600">
+                        {formatBillId(vote.bill_id)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
                     {formatDate(vote.date)}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-right flex-shrink-0">
                   <Badge variant={getVoteBadgeVariant(vote.member_vote)}>
                     {vote.member_vote}
                   </Badge>

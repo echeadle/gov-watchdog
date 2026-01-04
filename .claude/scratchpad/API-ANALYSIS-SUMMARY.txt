@@ -1,0 +1,206 @@
+================================================================================
+CONGRESS.GOV BILL API ANALYSIS - EXECUTIVE SUMMARY
+================================================================================
+
+INVESTIGATION ENDPOINTS:
+1. /bill/119/hr/1/summaries
+2. /bill/119/hr/1/subjects
+
+================================================================================
+SUMMARIES ENDPOINT - KEY FINDINGS
+================================================================================
+
+AVAILABLE FIELDS:
+- actionDate (ISO 8601 date)
+- actionDesc (human-readable action description)
+- text (HTML-formatted content)
+- updateDate (ISO 8601 timestamp)
+- versionCode (version identifier)
+
+SUMMARY CHARACTERISTICS:
+- Size: 15,000 to 65,000+ characters per summary
+- Author: Congressional Research Service (CRS) - no explicit author field
+- Format: HTML with semantic structure
+- Organization: Provisions grouped by policy area
+
+VERSION TYPES (5 DISTINCT VERSIONS):
+00 = Introduced
+07 = Reported to House
+49 = Public Law
+53 = Passed House
+55 = Passed Senate
+
+CONTENT EVOLUTION:
+- Introduced version: Brief overview
+- Passes House: Expanded with amendments and details
+- Passes Senate: Further expanded with Senate modifications
+- Public Law: Final enacted legislation
+
+EXAMPLE SNIPPET:
+"This bill reduces taxes, reduces or increases spending for various federal 
+programs, increases the statutory debt limit. Title I contains agricultural 
+conservation provisions affecting Department of Agriculture programs. Title II 
+addresses defense appropriations and military modernization..."
+
+================================================================================
+SUBJECTS ENDPOINT - KEY FINDINGS
+================================================================================
+
+DATA STRUCTURE:
+- Flat (non-hierarchical) - each subject independent
+- Paginated (20 per page in test)
+- Contains legislative subjects + single policy area
+
+SUBJECT COUNT:
+- 238 subjects for test bill (HR1)
+- Varies by bill complexity
+- Simple bills: 10-50 subjects
+- Complex bills: 100-238+ subjects
+- Average: 60-80 subjects per bill
+
+STRUCTURE:
+{
+  "policyArea": { "name": "Economics and Public Finance" },
+  "legislativeSubjects": [
+    { "name": "Abortion" },
+    { "name": "Accounting and auditing" },
+    { "name": "Agricultural conservation and pollution" },
+    ...
+  ]
+}
+
+EXAMPLE SUBJECT TERMS:
+- Policy domains: Abortion, Accounting, Administrative law, Technology
+- Resources: Agricultural insurance, prices, subsidies, credit
+- Environment: Air quality, Agricultural conservation
+- Geography: Alabama, Alaska, Afghanistan
+
+================================================================================
+DESIGN IMPLICATIONS FOR BILL SEARCH
+================================================================================
+
+1. FULL-TEXT SEARCH CAPABILITY
+   - 15k-65k characters of rich content per summary
+   - Perfect for keyword searching ("climate change", "agriculture funding")
+   - HTML requires parsing/stripping for display
+
+2. SUBJECT-BASED FILTERING
+   - Flat list simplifies search UI
+   - No hierarchy complexity
+   - Can use array filtering on legislative_subjects field
+   - Single policy_area for broad categorization
+
+3. BILL EVOLUTION TRACKING
+   - Multiple versions available
+   - Shows how bill changed through legislative process
+   - Can compare versions (Introduced vs. Passed vs. Law)
+
+4. SEARCH SCENARIOS SUPPORTED
+   a) Subject search: "Show me bills about agriculture"
+   b) Full-text search: "Find bills mentioning 'Department of Agriculture'"
+   c) Policy area filter: "All defense bills in 119th Congress"
+   d) Combined search: "Defense bills affecting military readiness"
+
+================================================================================
+MONGODB SCHEMA RECOMMENDATION
+================================================================================
+
+Collection: bills_extended
+
+{
+  "bill_id": "hr1-119",           // Unique identifier
+  "congress": 119,
+  "type": "hr",
+  "number": 1,
+  "title": "...",
+  
+  "policy_area": "Economics and Public Finance",
+  "legislative_subjects": [       // Array for filtering
+    "Abortion",
+    "Accounting and auditing",
+    "Agricultural conservation and pollution",
+    ...
+  ],
+  
+  "summaries": [                  // Version history
+    {
+      "version_code": "00",
+      "action_date": ISODate(...),
+      "action_desc": "Introduced in House",
+      "text_html": "...",
+      "text_plain": "...",
+      "updated_at": ISODate(...)
+    },
+    ...
+  ],
+  
+  "created_at": ISODate(...),
+  "updated_at": ISODate(...),
+  "ttl_expires_at": ISODate(...)  // 1-hour cache TTL
+}
+
+RECOMMENDED INDEXES:
+- Full-text: { "summary_text_plain": "text", "title": "text" }
+- Subjects: { "legislative_subjects": 1 }
+- Policy area: { "policy_area": 1, "congress": 1 }
+- Bill lookup: { "congress": 1, "type": 1, "number": 1 }
+
+================================================================================
+API EFFICIENCY ANALYSIS
+================================================================================
+
+CALLS PER BILL:
+1. GET /bill/{id}              (2 KB)
+2. GET /bill/{id}/summaries    (50 KB)
+3. GET /bill/{id}/subjects     (15 KB)
+───────────────────────────────
+Total: 3 API calls, ~65 KB data per bill
+
+RATE LIMIT MATH:
+- Rate limit: 5,000 requests/hour
+- 3 calls per bill = 1,666 bills/hour
+- Can fetch all ~10,000 bills in Congress in ~6 hours
+- With caching: dramatic reduction in repeat fetches
+
+STORAGE EFFICIENCY:
+- HR1 (budget): 15k-65k characters per version
+- Average bill: 5k-30k characters
+- Multiple versions: 3-5 per bill
+- MongoDB compression: ~2:1 ratio typical
+
+================================================================================
+KEY TAKEAWAYS
+================================================================================
+
+1. Rich content available for search
+   - 15k-65k character summaries enable powerful full-text search
+   
+2. Subject tagging is extensive
+   - Up to 238 subjects per bill
+   - Flat structure simplifies implementation
+   
+3. Version tracking built-in
+   - Multiple versions show bill evolution
+   - Updated summaries as bill progresses
+   
+4. Efficient API structure
+   - Combinable endpoints
+   - Reasonable rate limits for full data import
+   - Cache well to reduce API calls
+   
+5. Search feature will support
+   - Keyword search: "climate change adaptation"
+   - Topic filtering: Bills about "agriculture"
+   - Policy area browsing: "Defense bills"
+   - Combined search: "Defense bills affecting readiness"
+
+================================================================================
+FILES CREATED IN SCRATCHPAD
+================================================================================
+
+- congress-api-bill-structure.md   [Full technical documentation]
+- bill-search-summary.md            [Quick reference for implementation]
+- bill-api-examples.md              [Real data examples + MongoDB patterns]
+- research-notes.md                 [Updated with findings]
+
+================================================================================

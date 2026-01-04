@@ -345,15 +345,24 @@ class Command(BaseCommand):
             total_present += party_total.get("presentTotal", 0)
             total_not_voting += party_total.get("notVotingTotal", 0)
 
-        # Extract bill information (if present)
+        # Extract bill/legislation information (if present)
         bill_id = None
-        bill = vote_data.get("bill")
-        if bill:
-            bill_type = (bill.get("type") or "").lower()
-            bill_number = bill.get("number")
-            bill_congress = bill.get("congress")
-            if bill_type and bill_number and bill_congress:
-                bill_id = f"{bill_type}{bill_number}-{bill_congress}"
+
+        # Try legislationNumber/legislationType fields first (House votes)
+        leg_number = vote_data.get("legislationNumber")
+        leg_type = vote_data.get("legislationType")
+        if leg_number and leg_type:
+            bill_type_lower = leg_type.lower()
+            bill_id = f"{bill_type_lower}{leg_number}-{congress}"
+        else:
+            # Fall back to bill object (if present)
+            bill = vote_data.get("bill")
+            if bill:
+                bill_type = (bill.get("type") or "").lower()
+                bill_number = bill.get("number")
+                bill_congress = bill.get("congress")
+                if bill_type and bill_number and bill_congress:
+                    bill_id = f"{bill_type}{bill_number}-{bill_congress}"
 
         return {
             "vote_id": vote_id,

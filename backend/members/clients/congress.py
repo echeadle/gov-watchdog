@@ -10,6 +10,7 @@ from functools import wraps
 from typing import Any, Optional
 
 import httpx
+from bs4 import BeautifulSoup
 
 from django.conf import settings
 
@@ -185,14 +186,44 @@ class CongressClient:
         limit: int = 20,
         offset: int = 0,
     ) -> dict[str, Any]:
-        """Search for bills."""
-        endpoint = "/bill"
-        params = {"limit": limit, "offset": offset}
+        """
+        Search for bills.
+
+        Note: Congress.gov API requires /bill/{congress} format, not query param.
+        """
+        # Use /bill/{congress} endpoint format (query param doesn't work)
         if congress:
-            params["congress"] = congress
+            endpoint = f"/bill/{congress}"
+        else:
+            endpoint = "/bill"
+
+        params = {"limit": limit, "offset": offset}
         # Note: Congress.gov API doesn't have direct text search
         # Query filtering would need to be done client-side
         return await self._get(endpoint, params)
+
+    async def get_bill_summaries(
+        self, congress: int, bill_type: str, bill_number: int
+    ) -> dict[str, Any]:
+        """
+        Get bill summaries from /bill/{congress}/{type}/{number}/summaries.
+
+        Returns CRS-generated summaries at different bill stages.
+        Summaries are HTML-formatted and 15k-65k characters.
+        """
+        endpoint = f"/bill/{congress}/{bill_type}/{bill_number}/summaries"
+        return await self._get(endpoint)
+
+    async def get_bill_subjects(
+        self, congress: int, bill_type: str, bill_number: int
+    ) -> dict[str, Any]:
+        """
+        Get bill subjects from /bill/{congress}/{type}/{number}/subjects.
+
+        Returns policy area and legislative subjects (topics).
+        """
+        endpoint = f"/bill/{congress}/{bill_type}/{bill_number}/subjects"
+        return await self._get(endpoint)
 
     # ==================== Vote Endpoints ====================
 
@@ -268,7 +299,12 @@ class CongressClient:
         member = data.get("member", data)
 
         # Get current term info
-        terms = member.get("terms", {}).get("item", [])
+        # Handle both formats: {"item": [...]} from list endpoint, or [...] from detail endpoint
+        terms_data = member.get("terms", [])
+        if isinstance(terms_data, dict):
+            terms = terms_data.get("item", [])
+        else:
+            terms = terms_data if isinstance(terms_data, list) else []
         current_term = terms[-1] if terms else {}
 
         # Determine chamber from current term - normalize to "house" or "senate"
@@ -294,6 +330,11 @@ class CongressClient:
         if len(state) > 2:
             state = self.STATE_ABBREV.get(state, state)
 
+        # Extract contact information from addressInformation
+        address_info = member.get("addressInformation", {})
+        phone = address_info.get("phoneNumber")
+        office_address = address_info.get("officeAddress")
+
         return {
             "bioguide_id": member.get("bioguideId"),
             "name": full_name,
@@ -305,6 +346,8 @@ class CongressClient:
             "chamber": chamber,
             "image_url": member.get("depiction", {}).get("imageUrl"),
             "official_url": member.get("officialWebsiteUrl"),
+            "phone": phone,
+            "address": office_address,
             "terms": [self._transform_term(t) for t in terms],
         }
 
@@ -351,15 +394,59 @@ class CongressClient:
             "party": self._normalize_party(term.get("partyName", "")),
         }
 
-    def transform_bill(self, data: dict) -> dict:
-        """Transform API bill data to our schema."""
+    @staticmethod
+    def strip_html(html_text: str) -> str:
+        """
+        Strip HTML tags from text and return plain text.
+
+        Args:
+            html_text: HTML-formatted text
+
+        Returns:
+            Plain text with HTML tags removed
+        """
+        if not html_text:
+            return ""
+
+        soup = BeautifulSoup(html_text, "html.parser")
+        # Get text and clean up whitespace
+        text = soup.get_text(separator=" ", strip=True)
+        # Normalize multiple spaces to single space
+        return " ".join(text.split())
+
+    def transform_bill(
+        self,
+        data: dict,
+        summaries_data: Optional[dict] = None,
+        subjects_data: Optional[dict] = None,
+    ) -> dict | None:
+        """
+        Transform API bill data to our schema.
+
+        Args:
+            data: Bill data from /bill endpoint
+            summaries_data: Optional summaries data from /summaries endpoint
+            subjects_data: Optional subjects data from /subjects endpoint
+
+        Returns:
+            Transformed bill dict or None if not a valid bill
+        """
         bill = data.get("bill", data)
+
+        # Check if this is an amendment (has amendmentNumber but no bill number)
+        if "amendmentNumber" in bill or bill.get("number") is None:
+            # This is an amendment, not a bill - skip it
+            return None
 
         # Safely handle bill type which can be None
         bill_type = bill.get("type") or ""
         bill_type_lower = bill_type.lower() if bill_type else ""
 
-        return {
+        # If no bill type, this isn't a valid bill
+        if not bill_type:
+            return None
+
+        result = {
             "bill_id": f"{bill_type_lower}{bill.get('number')}-{bill.get('congress')}",
             "congress": bill.get("congress"),
             "type": bill_type_lower,
@@ -372,6 +459,100 @@ class CongressClient:
             "introduced_date": bill.get("introducedDate"),
             "latest_action": bill.get("latestAction", {}).get("text"),
             "latest_action_date": bill.get("latestAction", {}).get("actionDate"),
+            # Initialize with defaults
+            "legislative_subjects": [],
+            "summaries": [],
+        }
+
+        # Add subjects if provided
+        if subjects_data and isinstance(subjects_data, dict):
+            try:
+                subjects = subjects_data.get("subjects", subjects_data)
+
+                # Ensure subjects is a dict before calling .get()
+                if isinstance(subjects, dict):
+                    # Extract policy area
+                    policy_area = subjects.get("policyArea")
+                    if policy_area and isinstance(policy_area, dict):
+                        result["policy_area"] = policy_area.get("name")
+
+                    # Extract legislative subjects
+                    legislative_subjects = subjects.get("legislativeSubjects", [])
+                    if isinstance(legislative_subjects, dict):
+                        # Handle paginated response
+                        legislative_subjects = legislative_subjects.get("item", [])
+
+                    if isinstance(legislative_subjects, list):
+                        result["legislative_subjects"] = [
+                            subj.get("name") for subj in legislative_subjects
+                            if isinstance(subj, dict) and subj.get("name")
+                        ]
+            except Exception as e:
+                logger.warning(f"Error processing subjects data: {e}")
+
+        # Add summaries if provided
+        if summaries_data and isinstance(summaries_data, dict):
+            try:
+                summaries = summaries_data.get("summaries", summaries_data)
+                if isinstance(summaries, dict):
+                    # Handle paginated response
+                    summaries = summaries.get("item", [])
+
+                if isinstance(summaries, list):
+                    result["summaries"] = [
+                        {
+                            "version_code": s.get("versionCode"),
+                            "action_desc": s.get("actionDesc"),
+                            "action_date": s.get("actionDate"),
+                            "text_html": s.get("text"),
+                            "text_plain": self.strip_html(s.get("text", "")),
+                            "updated_at": s.get("updateDate"),
+                        }
+                        for s in summaries
+                        if isinstance(s, dict) and s.get("text")
+                    ]
+            except Exception as e:
+                logger.warning(f"Error processing summaries data: {e}")
+
+        return result
+
+    def transform_amendment(self, data: dict) -> dict | None:
+        """
+        Transform API amendment data to our schema.
+
+        Returns None if the item is not a valid amendment.
+        """
+        amendment = data.get("amendment", data)
+
+        # Check if this has an amendment number
+        amendment_number = amendment.get("amendmentNumber")
+        if not amendment_number:
+            return None
+
+        congress = amendment.get("congress")
+        amendment_type = amendment.get("type", "").lower() if amendment.get("type") else ""
+
+        # Determine amendment type (hamdt = House amendment, samdt = Senate amendment)
+        if not amendment_type:
+            # Infer from URL if available
+            url = amendment.get("url", "")
+            if "hamdt" in url:
+                amendment_type = "hamdt"
+            elif "samdt" in url:
+                amendment_type = "samdt"
+
+        return {
+            "amendment_id": f"{amendment_type}{amendment_number}-{congress}",
+            "amendment_number": amendment_number,
+            "congress": congress,
+            "type": amendment_type,
+            "description": amendment.get("description", ""),
+            "purpose": amendment.get("purpose", ""),
+            "chamber": "house" if amendment_type == "hamdt" else "senate" if amendment_type == "samdt" else None,
+            "introduced_date": amendment.get("introducedDate"),
+            "latest_action": amendment.get("latestAction", {}).get("text"),
+            "latest_action_date": amendment.get("latestAction", {}).get("actionDate"),
+            "url": amendment.get("url"),
         }
 
 

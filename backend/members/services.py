@@ -473,17 +473,58 @@ class MemberService:
                     bioguide_id, limit=limit, offset=offset
                 )
 
-            # Transform bills
+            # Transform bills (filter out None values for amendments)
             bills = []
             for item in data.get("sponsoredLegislation", data.get("cosponsoredLegislation", [])):
-                bills.append(client.transform_bill(item))
+                transformed = client.transform_bill(item)
+                if transformed is not None:  # Skip amendments and invalid items
+                    bills.append(transformed)
 
             return {
                 "results": bills,
-                "total": data.get("pagination", {}).get("count", len(bills)),
+                "total": len(bills),  # Use actual count of valid bills
             }
         except Exception as e:
             logger.error(f"Failed to fetch bills for {bioguide_id}: {e}")
+            return {"results": [], "total": 0, "error": str(e)}
+
+    @staticmethod
+    async def get_member_amendments(
+        bioguide_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict:
+        """
+        Get amendments sponsored by a member.
+
+        Args:
+            bioguide_id: Member's bioguide ID
+            limit: Number of results
+            offset: Pagination offset
+        """
+        client = get_congress_client()
+
+        try:
+            # Fetch sponsored legislation (which includes both bills and amendments)
+            data = await client.get_member_sponsored_legislation(
+                bioguide_id, limit=limit + 50, offset=offset  # Fetch extra to account for filtering
+            )
+
+            # Transform and filter for amendments only
+            amendments = []
+            for item in data.get("sponsoredLegislation", []):
+                transformed = client.transform_amendment(item)
+                if transformed is not None:  # Only amendments
+                    amendments.append(transformed)
+                    if len(amendments) >= limit:  # Stop when we have enough
+                        break
+
+            return {
+                "results": amendments[:limit],  # Limit to requested amount
+                "total": len(amendments),
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch amendments for {bioguide_id}: {e}")
             return {"results": [], "total": 0, "error": str(e)}
 
     @staticmethod

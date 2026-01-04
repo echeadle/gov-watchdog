@@ -3,6 +3,7 @@ import Layout from './components/layout/Layout'
 import Home from './pages/Home'
 import Members from './pages/Members'
 import MemberDetail from './pages/MemberDetail'
+import Bills from './pages/Bills'
 import Chat from './pages/Chat'
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/members" element={<Members />} />
         <Route path="/members/:bioguideId" element={<MemberDetail />} />
+        <Route path="/bills" element={<Bills />} />
         <Route path="/chat" element={<Chat />} />
       </Routes>
     </Layout>
